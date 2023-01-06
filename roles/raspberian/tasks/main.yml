@@ -1,0 +1,118 @@
+- name: apt | install updates
+  apt:
+    update_cache: true
+    upgrade: dist
+    cache_valid_time: 3600
+    force_apt_get: true
+
+- name: apt | install avahi and vim
+  apt:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - vim 
+    - avahi-daemon
+    - systemd-timesyncd
+    - locales
+
+- name: vim | set default editor 
+  shell: 
+    cmd: update-alternatives --set editor /usr/bin/vim.basic
+
+- name: vim | test for disabled mouse
+  command:
+    cmd: 'grep "^set mouse" /etc/vim/vimrc'
+  register: mouse_disabled
+  changed_when: false
+  ignore_errors: true
+
+- name: vim | debug
+  debug:
+    var: mouse_disabled
+    verbosity: 2
+
+- name: vim | disable mouse in vim
+  when: mouse_disabled.failed
+  shell:
+    cmd: echo "set mouse-=a" >> /etc/vim/vimrc
+
+- name: vim | test for disabled tty mouse
+  command:
+    cmd: 'grep "^set ttymouse" /etc/vim/vimrc.tiny'
+  register: tty_mouse_disabled
+  changed_when: false
+  ignore_errors: true
+
+- name: vim | debug
+  debug:
+    var: tty_mouse_disabled
+    verbosity: 2
+
+- name: vim | disable ttymouse in vim
+  when: tty_mouse_disabled.failed
+  shell:
+    cmd: echo "set ttymouse-=a" >> /etc/vim/vimrc.tiny
+
+- name: file | create be-root
+  copy:
+    dest: /usr/local/bin/be-root
+    mode: 0755
+    owner: root
+    group: root
+    content: |          
+      #!/usr/bin/env bash
+      sudo su - ${*}
+
+- name: locale | update environment             
+  shell:
+    cmd: |
+      cat << EOF | tee -a /etc/environment
+      LANG=en_US.utf-8
+      LC_ALL=en_US.utf-8
+      EOF
+
+- name: locale | disable existing
+  shell:
+    cmd: sudo sed -i.bak '/^#/!s/.*/# &/' /etc/locale.gen
+
+- name: locale | locale.gen
+  shell:
+    cmd: |
+      cat << EOF | tee -a /etc/locale.gen
+      en_US.UTF-8 UTF-8
+      EOF
+
+- name: locale | generate 
+  shell:
+    cmd: locale-gen
+
+- name: avahi | create ssh.service file
+  copy:
+    dest: /etc/avahi/services/ssh.service
+    content: |
+      <?xml version="1.0" standalone='no'?>
+      <!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+      <service-group>
+        <name replace-wildcards="yes">%h</name>
+        <service>
+          <type>_ssh._tcp</type>
+          <port>22</port>
+        </service>
+      </service-group>
+
+- name: avahi | start and enable service
+  systemd:
+    name: avahi-daemon.service
+    enabled: true
+    state: started
+
+- name: services | systemd-timesyncd
+  systemd:
+    name: systemd-timesyncd.service
+    state: started   
+    enabled: yes
+    masked: no
+
+- name: timedatectl | enable ntp
+  shell:
+    cmd: timedatectl set-ntp true 

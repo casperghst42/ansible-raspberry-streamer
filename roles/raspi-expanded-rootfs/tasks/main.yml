@@ -1,0 +1,20 @@
+---
+- name: filesystem | check unpartitioned space
+  shell: /sbin/parted /dev/mmcblk0 unit gb print free | grep 'Free Space' | tail -n1 | awk '{print $3}'
+  register: unpartitioned
+  changed_when: false
+  failed_when: unpartitioned.stderr != ""
+
+- name: filesystem | expand to fill disk
+  command: raspi-config --expand-rootfs
+  when: unpartitioned.stdout != "0.00GB"
+  register: result
+
+- name: filesytem | result from partition operation
+  debug:
+    var: result
+    verbosity: 0
+
+- name: filesystem | reboot after file system change
+  reboot:
+  when: unpartitioned.stdout != "0.00GB"

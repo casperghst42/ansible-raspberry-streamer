@@ -1,0 +1,142 @@
+---
+- name: shairport-sync and nqptp | install packages needed for build
+  apt:
+    name: "{{ item }}"
+    state: present
+    install_recommends: false
+  loop:
+    - build-essential 
+    - git 
+    - xmltoman 
+    - autoconf 
+    - automake 
+    - libtool 
+    - libpopt-dev 
+    - libconfig-dev 
+    - libasound2-dev 
+    - libavahi-client-dev 
+    - libssl-dev 
+    - libsoxr-dev
+    - libmosquitto-dev
+    - libplist-dev
+    - libsodium-dev
+    - libgcrypt-dev
+    - libavutil-dev
+    - libavcodec-dev
+    - libavformat-dev
+    - uuid-dev
+
+- name: nqptp | clean up
+  file:
+    path: /tmp/nqptp
+    state: absent
+  register: nqptp_clean_up
+
+- name: nqptp | git clone
+  git:
+    repo: https://github.com/mikebrady/nqptp.git
+    dest: /tmp/nqptp
+  register: nqptp_git_clone
+
+- name: nqptp | autoconf for build
+  when: not nqptp_git_clone.failed
+  command: autoreconf -fi
+  args:
+    chdir: /tmp/nqptp
+  register: nqptp_autoconf
+
+- name: nqptp | configure for build
+  when: not nqptp_autoconf.failed
+  command: ./configure --with-systemd-startup
+  args:
+    chdir: /tmp/nqptp
+  register: nqptp_configure
+
+- name: nqptp | make
+  when: not nqptp_configure.failed
+  command: make
+  args:
+    chdir: /tmp/nqptp
+  register: nqptp_make
+
+- name: nqptp | make install
+  when: not nqptp_make.failed
+  command: make install
+  args:
+    chdir: /tmp/nqptp
+  register: ntptp_install
+
+- name: nqptp | enable and start service
+  when: not ntptp_install.failed
+  systemd:
+    name: nqptp.service
+    state: started   
+    enabled: yes
+    masked: no
+
+- name: shairport-sync | clean up
+  file:
+    path: /tmp/shairport-sync
+    state: absent
+  register: shairport_clean_up
+
+- name: shairport-sync | git clone
+  git:
+    repo: https://github.com/mikebrady/shairport-sync.git 
+    dest: /tmp/shairport-sync
+    clone: yes
+    update: yes
+  register: shairport_git_clone
+
+- name: shairport-sync | autoconf for build
+  when: not shairport_git_clone.failed
+  command: autoreconf -fi
+  args:
+    chdir: /tmp/shairport-sync
+  register: shairport_autoconf
+
+- name: shairport-sync | configure for build
+  when: not shairport_autoconf.failed
+  command: ./configure --sysconfdir=/etc --with-alsa --with-soxr --with-avahi --with-ssl=openssl --with-systemd --with-airplay-2 --with-mqtt-client
+  args:
+    chdir: /tmp/shairport-sync
+  register: shairport_configure
+
+- name: shairport-sync | make
+  when: not shairport_configure.failed
+  command: make
+  args:
+    chdir: /tmp/shairport-sync
+  register: shairport_make
+
+- name: shairport-sync | make install
+  when: not shairport_make.failed
+  command: make install
+  args:
+    chdir: /tmp/shairport-sync
+  register: shairport_install
+
+- name: shairport-sync | get output device
+  when: not shairport_install.failed
+  shell: shairport-sync -h | grep -A1 "hardware output devices" | tail -n1 | sed -e 's/^[[:space:]]*//' | tr -d '"'
+  register: shairport_output_device
+
+- name: debug | shairport-sync | device
+  debug:
+    var: shairport_output_device.stdout
+    verbosity: 0
+
+- name: shairport-sync | create conf file
+  when: not shairport_output_device.failed
+  template:
+    src: shairport-sync.conf.j2
+    dest: /etc/shairport-sync.conf
+  register: shairport_conf_file
+
+- name: shairport-sync | enable and start service
+  when: not shairport_conf_file.failed
+  systemd:
+    name: shairport-sync.service
+    state: started   
+    enabled: yes
+    masked: no

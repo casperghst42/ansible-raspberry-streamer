@@ -1,0 +1,38 @@
+---
+- name: wireless-power-save | create unit file
+  copy:
+    dest: /etc/systemd/system/wifi_powersave@.service
+    content: |
+      [Unit]
+      Description=Set WiFi power save %i
+      After=sys-subsystem-net-devices-wlan0.device
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      ExecStart=/sbin/iw dev wlan0 set power_save %i
+
+      [Install]
+      WantedBy=sys-subsystem-net-devices-wlan0.device  
+  register: file_created
+
+- name: debug |  wireless-power-save | create unit file
+  debug:
+    var: file_created
+    verbosity: 2
+
+- name: wiereless-power-save | reload systemd daemon
+  systemd:
+    daemon_reload: yes
+
+- name: wireless-power-save | powersave 'off' enabled
+  systemd:
+    name: wifi_powersave@off.service
+    enabled: yes    
+    state: restarted
+  
+- name: wireless-power-save | powersave 'on' disabled
+  systemd:
+    name: wifi_powersave@on.service
+    enabled: no
+
