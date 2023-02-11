@@ -1,0 +1,11 @@
+---
+- name: bootstrap
+  gather_facts: true
+  become: true
+  become_method: sudo
+  hosts: all
+
+  roles:
+    - raspi-expanded-rootfs
+    - wireless-power-save
+    - raspberian
