@@ -74,6 +74,18 @@
     enabled: yes
     masked: no
 
+
+- name: shairport-sync | check for existing config
+  stat:
+    path: /etc/shairport-sync.conf
+  register: conf_backup_exist
+
+- name: shairport-sync | backup config
+  when: conf_backup_exist   
+  shell: |
+    cp /etc/shairport-sync.conf /tmp/shairport-sync.conf  
+  register: register_name.stat.exists
+
 - name: shairport-sync | clean up
   file:
     path: /tmp/shairport-sync
@@ -140,3 +152,8 @@
     state: started   
     enabled: yes
     masked: no
+
+- name: shairport-sync | restore config file
+  when: register_name.stat.exists
+  shell: |
+    cp /tmp/shairport-sync.conf /etc/shairport-sync.conf
